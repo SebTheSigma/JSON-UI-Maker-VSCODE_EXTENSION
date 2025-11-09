@@ -109,8 +109,14 @@ type ALL_ELEMENTS = Panel;
 export const WEB_SIDE_GLOBAL_ELEMENT_ID_MAP = new Map<string, ALL_ELEMENTS>();
 
 let lastWidth = window.innerWidth;
+
+/**
+ * Only proportionally scale elements that opt-in via data-resize-scale="true".
+ * This prevents window resizes from mutating arbitrary element properties.
+ */
 window.addEventListener("resize", () => {
     const newWidth = window.innerWidth;
+
     if (!lastWidth || lastWidth <= 0) {
         lastWidth = newWidth;
         return;
@@ -126,8 +132,9 @@ window.addEventListener("resize", () => {
     lastWidth = newWidth;
     console.log("Resized", scale);
 
-    // All elements with a data-id, so all json-ui elements.
-    const elements = document.querySelectorAll("[data-id]");
+    // Only scale elements that explicitly opt-in.
+    const elements = document.querySelectorAll('[data-id][data-resize-scale="true"]');
+
     elements.forEach((el) => {
         const style = (el as HTMLElement).style;
 
@@ -136,8 +143,7 @@ window.addEventListener("resize", () => {
         const width = Number(style.width.replace(/[A-Za-z]/g, ""));
         const height = Number(style.height.replace(/[A-Za-z]/g, ""));
 
-        // Only apply scaling when we have valid numeric values; this avoids corrupting elements
-        // that rely on auto/percentage or unset styles.
+        // Only apply scaling when we have valid numeric values.
         if (isFinite(left)) {
             style.left = `${left * scale}px`;
         }
