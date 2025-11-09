@@ -86,20 +86,45 @@ export const WEB_SIDE_GLOBAL_ELEMENT_ID_MAP = new Map<string, ALL_ELEMENTS>();
 
 let lastWidth = window.innerWidth;
 window.addEventListener("resize", () => {
-    const scale = window.innerWidth / lastWidth;
+    const newWidth = window.innerWidth;
+    if (!lastWidth || lastWidth <= 0) {
+        lastWidth = newWidth;
+        return;
+    }
 
-    // Update
-    lastWidth = window.innerWidth;
+    const scale = newWidth / lastWidth;
+    if (!isFinite(scale) || scale === 0) {
+        lastWidth = newWidth;
+        return;
+    }
+
+    // Update baseline
+    lastWidth = newWidth;
     console.log("Resized", scale);
 
-    // All elements with a data id, so all json-ui elements
+    // All elements with a data-id, so all json-ui elements.
     const elements = document.querySelectorAll("[data-id]");
     elements.forEach((el) => {
         const style = (el as HTMLElement).style;
-        style.left = `${Number(style.left.replace(/[A-Za-z]/g, "")) * scale}px`;
-        style.top = `${Number(style.top.replace(/[A-Za-z]/g, "")) * scale}px`;
 
-        style.width = `${Number(style.width.replace(/[A-Za-z]/g, "")) * scale}px`;
-        style.height = `${Number(style.height.replace(/[A-Za-z]/g, "")) * scale}px`;
+        const left = Number(style.left.replace(/[A-Za-z]/g, ""));
+        const top = Number(style.top.replace(/[A-Za-z]/g, ""));
+        const width = Number(style.width.replace(/[A-Za-z]/g, ""));
+        const height = Number(style.height.replace(/[A-Za-z]/g, ""));
+
+        // Only apply scaling when we have valid numeric values; this avoids corrupting elements
+        // that rely on auto/percentage or unset styles.
+        if (isFinite(left)) {
+            style.left = `${left * scale}px`;
+        }
+        if (isFinite(top)) {
+            style.top = `${top * scale}px`;
+        }
+        if (isFinite(width) && width > 0) {
+            style.width = `${width * scale}px`;
+        }
+        if (isFinite(height) && height > 0) {
+            style.height = `${height * scale}px`;
+        }
     });
 });

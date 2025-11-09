@@ -235,6 +235,9 @@ var App = (() => {
       __publicField(this, "initialY", 0);
       __publicField(this, "parentRect");
       __publicField(this, "cleanupResize", null);
+      // Stable document-level handlers bound to this instance.
+      __publicField(this, "onMouseMove", (event) => this.drag(event));
+      __publicField(this, "onMouseUp", () => this.stopDrag());
       this.data = data;
       this.parentId = parentId;
       this.parent = document.querySelector(`[data-id="${parentId}"]`) ?? container;
@@ -258,12 +261,8 @@ var App = (() => {
       this.el.addEventListener("mousedown", (event) => {
         this.startDrag(event);
       });
-      document.addEventListener("mouseup", () => {
-        this.stopDrag();
-      });
-      document.addEventListener("mousemove", (event) => {
-        this.drag(event);
-      });
+      document.addEventListener("mousemove", this.onMouseMove);
+      document.addEventListener("mouseup", this.onMouseUp);
       this.cleanupResize = makeElementResizable(this.el, {
         parent: this.parent,
         minWidth: 40,
@@ -311,6 +310,13 @@ var App = (() => {
       });
     }
     startDrag(event) {
+      const target = event.target;
+      if (target && target.dataset && target.dataset.resizeHandle) {
+        return;
+      }
+      if (!this.el.contains(event.target)) {
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       this.parentRect = this.parent.getBoundingClientRect();
@@ -323,12 +329,13 @@ var App = (() => {
       this.isDragging = false;
     }
     drag(event) {
-      if (this.isDragging) {
-        const deltaX = event.clientX - this.parentRect.left - this.initialX;
-        const deltaY = event.clientY - this.parentRect.top - this.initialY;
-        this.el.style.left = `${deltaX}px`;
-        this.el.style.top = `${deltaY}px`;
+      if (!this.isDragging) {
+        return;
       }
+      const deltaX = event.clientX - this.parentRect.left - this.initialX;
+      const deltaY = event.clientY - this.parentRect.top - this.initialY;
+      this.el.style.left = `${deltaX}px`;
+      this.el.style.top = `${deltaY}px`;
     }
     delete() {
       if (this.el.classList.contains("selected")) {
@@ -342,13 +349,11 @@ var App = (() => {
         this.cleanupResize();
         this.cleanupResize = null;
       }
-      this.parent.removeChild(this.el);
-      document.removeEventListener("mouseup", () => {
-        this.stopDrag();
-      });
-      document.removeEventListener("mousemove", (event) => {
-        this.drag(event);
-      });
+      document.removeEventListener("mousemove", this.onMouseMove);
+      document.removeEventListener("mouseup", this.onMouseUp);
+      if (this.el.parentElement === this.parent) {
+        this.parent.removeChild(this.el);
+      }
     }
   };
 
@@ -419,16 +424,37 @@ var App = (() => {
   var WEB_SIDE_GLOBAL_ELEMENT_ID_MAP = /* @__PURE__ */ new Map();
   var lastWidth = window.innerWidth;
   window.addEventListener("resize", () => {
-    const scale = window.innerWidth / lastWidth;
-    lastWidth = window.innerWidth;
+    const newWidth = window.innerWidth;
+    if (!lastWidth || lastWidth <= 0) {
+      lastWidth = newWidth;
+      return;
+    }
+    const scale = newWidth / lastWidth;
+    if (!isFinite(scale) || scale === 0) {
+      lastWidth = newWidth;
+      return;
+    }
+    lastWidth = newWidth;
     console.log("Resized", scale);
     const elements = document.querySelectorAll("[data-id]");
     elements.forEach((el) => {
       const style = el.style;
-      style.left = `${Number(style.left.replace(/[A-Za-z]/g, "")) * scale}px`;
-      style.top = `${Number(style.top.replace(/[A-Za-z]/g, "")) * scale}px`;
-      style.width = `${Number(style.width.replace(/[A-Za-z]/g, "")) * scale}px`;
-      style.height = `${Number(style.height.replace(/[A-Za-z]/g, "")) * scale}px`;
+      const left = Number(style.left.replace(/[A-Za-z]/g, ""));
+      const top = Number(style.top.replace(/[A-Za-z]/g, ""));
+      const width = Number(style.width.replace(/[A-Za-z]/g, ""));
+      const height = Number(style.height.replace(/[A-Za-z]/g, ""));
+      if (isFinite(left)) {
+        style.left = `${left * scale}px`;
+      }
+      if (isFinite(top)) {
+        style.top = `${top * scale}px`;
+      }
+      if (isFinite(width) && width > 0) {
+        style.width = `${width * scale}px`;
+      }
+      if (isFinite(height) && height > 0) {
+        style.height = `${height * scale}px`;
+      }
     });
   });
   return __toCommonJS(mainScript_exports);

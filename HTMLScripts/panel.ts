@@ -40,23 +40,25 @@ export class Panel {
         WEB_SIDE_GLOBAL_ELEMENT_ID_MAP.set(this.data.dataset.id, this);
     }
 
+    // Stable document-level handlers bound to this instance.
+    private readonly onMouseMove: (event: MouseEvent) => void = (event) => this.drag(event);
+    private readonly onMouseUp: (event: MouseEvent) => void = () => this.stopDrag();
+
     public init() {
         this.asignData();
         this.selectionSystem();
 
-        this.el.addEventListener("mousedown", (event) => {
+        // Start drag only from this element body, not from resize handles.
+        this.el.addEventListener("mousedown", (event: MouseEvent) => {
             this.startDrag(event);
         });
 
-        document.addEventListener("mouseup", () => {
-            this.stopDrag();
-        });
-
-        document.addEventListener("mousemove", (event) => {
-            this.drag(event);
-        });
+        // Register shared global listeners with stable references.
+        document.addEventListener("mousemove", this.onMouseMove);
+        document.addEventListener("mouseup", this.onMouseUp);
 
         // Enable 8-direction resizing for this panel.
+        // Handles call stopPropagation/preventDefault; guard in startDrag prevents conflicts.
         this.cleanupResize = makeElementResizable(this.el, {
             parent: this.parent,
             minWidth: 40,
@@ -114,6 +116,17 @@ export class Panel {
     }
 
     public startDrag(event: MouseEvent) {
+        // Ignore drags originating from resize handles to avoid conflict.
+        const target = event.target as HTMLElement | null;
+        if (target && target.dataset && target.dataset.resizeHandle) {
+            return;
+        }
+
+        // Only start dragging if the mousedown is on this panel element or its non-handle children.
+        if (!this.el.contains(event.target as Node)) {
+            return;
+        }
+
         event.preventDefault();
         event.stopPropagation();
 
@@ -130,12 +143,16 @@ export class Panel {
     }
 
     public drag(event: MouseEvent) {
-        if (this.isDragging) {
-            const deltaX = event.clientX - this.parentRect.left - this.initialX;
-            const deltaY = event.clientY - this.parentRect.top - this.initialY;
-            this.el.style.left = `${deltaX}px`;
-            this.el.style.top = `${deltaY}px`;
+        // Only move this panel when its own drag is active.
+        if (!this.isDragging) {
+            return;
         }
+
+        const deltaX = event.clientX - this.parentRect.left - this.initialX;
+        const deltaY = event.clientY - this.parentRect.top - this.initialY;
+
+        this.el.style.left = `${deltaX}px`;
+        this.el.style.top = `${deltaY}px`;
     }
 
     public delete() {
@@ -152,14 +169,12 @@ export class Panel {
             this.cleanupResize = null;
         }
 
-        this.parent.removeChild(this.el);
+        // Remove document-level listeners for this instance to avoid leaks/ghost drags.
+        document.removeEventListener("mousemove", this.onMouseMove);
+        document.removeEventListener("mouseup", this.onMouseUp);
 
-        document.removeEventListener("mouseup", () => {
-            this.stopDrag();
-        });
-
-        document.removeEventListener("mousemove", (event) => {
-            this.drag(event);
-        });
+        if (this.el.parentElement === this.parent) {
+            this.parent.removeChild(this.el);
+        }
     }
 }
