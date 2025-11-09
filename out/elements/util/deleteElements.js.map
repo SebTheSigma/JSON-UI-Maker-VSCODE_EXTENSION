@@ -1,0 +1,1 @@
+{"version":3,"file":"deleteElements.js","sourceRoot":"","sources":["../../../src/elements/util/deleteElements.ts"],"names":[],"mappings":";;;AAAA,qDAA+C;AAG/C,MAAa,cAAc;IAEhB,MAAM,CAAC,aAAa,CAAC,SAAiB;QACzC,wBAAU,CAAC,OAAO,CAAC,WAAW,CAAC,EAAE,IAAI,EAAE,gBAAgB,EAAE,MAAM,EAAE,SAAS,EAAE,CAAC,CAAC;IAClF,CAAC;CACJ;AALD,wCAKC"}
