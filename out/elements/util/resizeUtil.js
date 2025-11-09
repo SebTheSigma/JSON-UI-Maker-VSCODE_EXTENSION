@@ -1,40 +1,25 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.makeElementResizable = makeElementResizable;
-/**
- * Attach 8-direction resize handles to a positioned element.
- *
- * This utility:
- * - Assumes the element uses absolute or relative positioning with numeric px top/left/width/height.
- * - Adds overlay handles (no external deps, consistent with existing UX).
- * - Avoids interfering with existing drag logic by:
- *   - Only initiating resize when mousedown originates from a handle, not the body of the element.
- *   - Using stopPropagation on handle mousedown.
- */
-function makeElementResizable(classInstance, options = {}) {
-    const target = classInstance.el;
+function makeElementResizable(target, options = {}) {
+    console.log("makeElementResizable called on:", target);
     const parent = options.parent ??
         target.offsetParent ??
         target.parentElement;
     const minWidth = options.minWidth ?? 20;
     const minHeight = options.minHeight ?? 20;
-    if (!parent) {
-        // Fallback: allow resize without explicit parent constraints.
-        console.warn("[resizeUtil] No parent found for resizable element; using viewport as bounds.");
-    }
     const handles = [];
     const handleSize = 8;
     const directions = [
-        "n",
-        "s",
-        "e",
-        "w",
-        "ne",
         "nw",
-        "se",
+        "n",
+        "ne",
+        "w",
+        "e",
         "sw",
+        "s",
+        "se",
     ];
-    // Ensure target is positioned
     const computed = window.getComputedStyle(target);
     if (computed.position !== "absolute" &&
         computed.position !== "relative" &&
@@ -45,67 +30,87 @@ function makeElementResizable(classInstance, options = {}) {
     for (const dir of directions) {
         const handle = document.createElement("div");
         handle.dataset.resizeHandle = dir;
-        // Visual/UX consistent minimal style: small square/edge zones.
         handle.style.position = "absolute";
-        handle.style.width =
-            dir === "n" || dir === "s" ? "100%" : `${handleSize}px`;
-        handle.style.height =
-            dir === "e" || dir === "w" ? "100%" : `${handleSize}px`;
-        handle.style.zIndex = "9999";
-        handle.style.background = "transparent";
+        handle.style.zIndex = "99999";
+        handle.style.background = "transparent"; // Invisible but hit-testable
         handle.style.pointerEvents = "auto";
-        // Cursor styles
+        handle.style.userSelect = "none";
         switch (dir) {
             case "n":
+                // Slightly inset from extreme corners so corners can remain dedicated to diagonal-resize.
                 handle.style.top = "0";
-                handle.style.left = "0";
+                handle.style.left = `${handleSize}px`;
+                handle.style.right = `${handleSize}px`;
+                handle.style.height = `${handleSize}px`;
                 handle.style.cursor = "n-resize";
                 break;
             case "s":
                 handle.style.bottom = "0";
-                handle.style.left = "0";
+                handle.style.left = `${handleSize}px`;
+                handle.style.right = `${handleSize}px`;
+                handle.style.height = `${handleSize}px`;
                 handle.style.cursor = "s-resize";
                 break;
             case "e":
-                handle.style.top = "0";
                 handle.style.right = "0";
+                handle.style.top = `${handleSize}px`;
+                handle.style.bottom = `${handleSize}px`;
+                handle.style.width = `${handleSize}px`;
                 handle.style.cursor = "e-resize";
                 break;
             case "w":
-                handle.style.top = "0";
                 handle.style.left = "0";
+                handle.style.top = `${handleSize}px`;
+                handle.style.bottom = `${handleSize}px`;
+                handle.style.width = `${handleSize}px`;
                 handle.style.cursor = "w-resize";
                 break;
             case "ne":
                 handle.style.top = "0";
                 handle.style.right = "0";
+                handle.style.width = `${handleSize}px`;
+                handle.style.height = `${handleSize}px`;
                 handle.style.cursor = "ne-resize";
+                // Ensure corner has precedence over adjacent edges by being fully in the corner.
                 break;
             case "nw":
                 handle.style.top = "0";
                 handle.style.left = "0";
+                handle.style.width = `${handleSize}px`;
+                handle.style.height = `${handleSize}px`;
                 handle.style.cursor = "nw-resize";
                 break;
             case "se":
                 handle.style.bottom = "0";
                 handle.style.right = "0";
+                handle.style.width = `${handleSize}px`;
+                handle.style.height = `${handleSize}px`;
                 handle.style.cursor = "se-resize";
                 break;
             case "sw":
                 handle.style.bottom = "0";
                 handle.style.left = "0";
+                handle.style.width = `${handleSize}px`;
+                handle.style.height = `${handleSize}px`;
                 handle.style.cursor = "sw-resize";
                 break;
         }
-        // Attach mousedown for resize start
+        // IMPORTANT:
+        // Attach mousedown directly on the handle in bubble phase so panel-level
+        // listeners see event.target as this handle (with data-resize-handle),
+        // allowing them to skip drag. We still stopPropagation to avoid any
+        // outer listeners from misinterpreting this as a drag start.
         handle.addEventListener("mousedown", (event) => {
+            console.log("Handle mousedown:", dir);
             event.preventDefault();
             event.stopPropagation();
             startResize(event, dir);
         });
         target.appendChild(handle);
         handles.push({ dir, el: handle });
+        console.log("Created handle:", dir, handle);
     }
+    console.log("Total handles created:", handles.length);
     let isResizing = false;
     let currentDir = null;
     let startX = 0;
@@ -115,90 +120,139 @@ function makeElementResizable(classInstance, options = {}) {
     let startLeft = 0;
     let startTop = 0;
     const onMouseMove = (event) => {
-        if (!isResizing || !currentDir)
+        if (!isResizing || !currentDir) {
             return;
-        const parentRect = parent?.getBoundingClientRect() ??
-            new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+        }
+        event.preventDefault();
+        event.stopPropagation();
         const dx = event.clientX - startX;
         const dy = event.clientY - startY;
-        let newWidth = startWidth;
-        let newHeight = startHeight;
-        let newLeft = startLeft;
-        let newTop = startTop;
-        if (currentDir.includes("e")) {
-            newWidth = clamp(startWidth + dx, minWidth, parentRect.width - (startLeft - parentRect.left));
+        const parentWidth = parent ? parent.clientWidth : Number.POSITIVE_INFINITY;
+        const parentHeight = parent
+            ? parent.clientHeight
+            : Number.POSITIVE_INFINITY;
+        const hasEast = currentDir.includes("e");
+        const hasWest = currentDir.includes("w");
+        const hasNorth = currentDir.includes("n");
+        const hasSouth = currentDir.includes("s");
+        // Horizontal resizing
+        if (hasEast && !hasWest) {
+            // Dragging right edge: only change width, keep left fixed.
+            let newWidth = startWidth + dx;
+            if (parent) {
+                newWidth = Math.min(newWidth, parentWidth - startLeft);
+            }
+            newWidth = Math.max(minWidth, newWidth);
+            target.style.width = `${newWidth}px`;
         }
-        if (currentDir.includes("s")) {
-            newHeight = clamp(startHeight + dy, minHeight, parentRect.height - (startTop - parentRect.top));
+        else if (hasWest && !hasEast) {
+            // Dragging left edge: adjust left and width so right edge stays anchored.
+            let newLeft = startLeft + dx;
+            let newWidth = startWidth - dx;
+            if (parent && newLeft < 0) {
+                newLeft = 0;
+                newWidth = startLeft + startWidth;
+            }
+            // Clamp width to minimum and adjust left to keep right edge anchored
+            if (newWidth < minWidth) {
+                newWidth = minWidth;
+                newLeft = startLeft + startWidth - minWidth;
+            }
+            target.style.left = `${newLeft}px`;
+            target.style.width = `${newWidth}px`;
         }
-        if (currentDir.includes("w")) {
-            const maxDeltaLeft = startWidth - minWidth;
-            const pxFromParentLeft = startLeft - parentRect.left;
-            const minLeftWithinParent = parentRect.left;
-            let proposedLeft = startLeft + dx;
-            const constrainedLeft = Math.max(minLeftWithinParent, Math.min(startLeft + maxDeltaLeft, proposedLeft));
-            const appliedDx = constrainedLeft - startLeft;
-            newLeft = constrainedLeft;
-            newWidth = startWidth - appliedDx;
+        else if (hasEast && hasWest) {
+            // Corner cases including both east and west should effectively behave as east+west,
+            // but to avoid conflicting logic, prefer treating them as east anchored (no horizontal shift).
+            let newWidth = startWidth + dx;
+            if (parent) {
+                newWidth = Math.min(newWidth, parentWidth - startLeft);
+            }
+            newWidth = Math.max(minWidth, newWidth);
+            target.style.width = `${newWidth}px`;
         }
-        if (currentDir.includes("n")) {
-            const maxDeltaTop = startHeight - minHeight;
-            const pxFromParentTop = startTop - parentRect.top;
-            const minTopWithinParent = parentRect.top;
-            let proposedTop = startTop + dy;
-            const constrainedTop = Math.max(minTopWithinParent, Math.min(startTop + maxDeltaTop, proposedTop));
-            const appliedDy = constrainedTop - startTop;
-            newTop = constrainedTop;
-            newHeight = startHeight - appliedDy;
+        // Vertical resizing
+        if (hasSouth && !hasNorth) {
+            // Dragging bottom edge: only change height, keep top fixed.
+            let newHeight = startHeight + dy;
+            if (parent) {
+                newHeight = Math.min(newHeight, parentHeight - startTop);
+            }
+            newHeight = Math.max(minHeight, newHeight);
+            target.style.height = `${newHeight}px`;
         }
-        const parentLeft = parentRect.left;
-        const parentTop = parentRect.top;
-        const offsetLeft = newLeft - parentLeft;
-        const offsetTop = newTop - parentTop;
-        target.style.width = `${newWidth}px`;
-        target.style.height = `${newHeight}px`;
-        target.style.left = `${offsetLeft}px`;
-        target.style.top = `${offsetTop}px`;
+        else if (hasNorth && !hasSouth) {
+            // Dragging top edge: adjust top and height so bottom edge stays anchored.
+            let newTop = startTop + dy;
+            let newHeight = startHeight - dy;
+            if (parent && newTop < 0) {
+                newTop = 0;
+                newHeight = startTop + startHeight;
+            }
+            // Clamp height to minimum and adjust top to keep bottom edge anchored
+            if (newHeight < minHeight) {
+                newHeight = minHeight;
+                newTop = startTop + startHeight - minHeight;
+            }
+            target.style.top = `${newTop}px`;
+            target.style.height = `${newHeight}px`;
+        }
+        else if (hasSouth && hasNorth) {
+            // Corner with both north and south; prefer treating as south anchored (no vertical shift).
+            let newHeight = startHeight + dy;
+            if (parent) {
+                newHeight = Math.min(newHeight, parentHeight - startTop);
+            }
+            newHeight = Math.max(minHeight, newHeight);
+            target.style.height = `${newHeight}px`;
+        }
         if (options.onResize) {
             const rect = target.getBoundingClientRect();
             options.onResize(rect, target.style);
         }
     };
-    const onMouseUp = () => {
-        if (!isResizing)
+    const onMouseUp = (event) => {
+        if (!isResizing) {
             return;
+        }
+        console.log("Resize ended");
+        event.preventDefault();
+        event.stopPropagation();
         isResizing = false;
         currentDir = null;
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
+        document.removeEventListener("mousemove", onMouseMove, true);
+        document.removeEventListener("mouseup", onMouseUp, true);
     };
     function startResize(event, dir) {
-        const rect = target.getBoundingClientRect();
-        const parentRect = parent?.getBoundingClientRect() ??
-            new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+        console.log("startResize called:", dir);
         isResizing = true;
         currentDir = dir;
         startX = event.clientX;
         startY = event.clientY;
-        startWidth = rect.width;
-        startHeight = rect.height;
-        startLeft = rect.left;
-        startTop = rect.top;
-        document.addEventListener("mousemove", onMouseMove);
-        document.addEventListener("mouseup", onMouseUp);
+        // Use the element's current style values to avoid coordinate space mismatch
+        startLeft = parseFloat(target.style.left) || 0;
+        startTop = parseFloat(target.style.top) || 0;
+        startWidth = target.offsetWidth;
+        startHeight = target.offsetHeight;
+        console.log("Start resize:", {
+            dir,
+            startLeft,
+            startTop,
+            startWidth,
+            startHeight,
+        });
+        document.addEventListener("mousemove", onMouseMove, true);
+        document.addEventListener("mouseup", onMouseUp, true);
     }
-    function clamp(value, min, max) {
-        return Math.max(min, Math.min(max, value));
-    }
-    // Return cleanup function for callers if they need to remove handles/listeners.
     return () => {
+        console.log("Cleanup resize handles");
         handles.forEach((h) => {
             if (h.el.parentElement === target) {
                 target.removeChild(h.el);
             }
         });
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
+        document.removeEventListener("mousemove", onMouseMove, true);
+        document.removeEventListener("mouseup", onMouseUp, true);
     };
 }
 //# sourceMappingURL=resizeUtil.js.map

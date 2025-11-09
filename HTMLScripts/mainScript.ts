@@ -1,5 +1,5 @@
 import { Panel } from "./panel.js";
-import { makeElementResizable } from "./util/resizeUtil.js";
+import { makeElementResizable } from "../src/elements/util/resizeUtil.js";
 
 declare function acquireVsCodeApi(): {
     postMessage: (message: any) => void;
@@ -22,10 +22,33 @@ window.addEventListener("message", (event) => {
                 // Panel constructor enables its own resizing via makeElementResizable.
                 break;
             }
+            default: {
+                // Generic element support: make any created element resizable
+                const parent =
+                    (parentId &&
+                        (document.querySelector(
+                            `[data-id="${parentId}"]`
+                        ) as HTMLElement | null)) || container;
+
+                const el = document.querySelector(
+                    `[data-id="${data.dataset?.id}"]`
+                ) as HTMLElement | null;
+
+                if (el) {
+                    makeElementResizable(el, {
+                        parent,
+                        minWidth: 20,
+                        minHeight: 20,
+                    });
+                }
+                break;
+            }
         }
     } else if (msg.type === "delete_element") {
         const elementId = msg.dataID;
-        const element = document.querySelector(`[data-id="${elementId}"]`) as HTMLElement | null;
+        const element = document.querySelector(
+            `[data-id="${elementId}"]`
+        ) as HTMLElement | null;
         if (!element) {
             return;
         }
@@ -38,7 +61,9 @@ window.addEventListener("message", (event) => {
         const elementID = msg.dataID;
         console.warn("GETTING ELEMENT", elementID, msg);
 
-        const element = document.querySelector(`[data-id="${elementID}"]`) as HTMLElement | null;
+        const element = document.querySelector(
+            `[data-id="${elementID}"]`
+        ) as HTMLElement | null;
         if (!element) {
             console.warn("Element not found Error: 01");
             return;
@@ -80,13 +105,18 @@ for (const button of buttons) {
     });
 }
 
-export type ALL_ELEMENTS = Panel;
-export type RESIZEABLE_ELEMENTS = Panel;
+type ALL_ELEMENTS = Panel;
 export const WEB_SIDE_GLOBAL_ELEMENT_ID_MAP = new Map<string, ALL_ELEMENTS>();
 
 let lastWidth = window.innerWidth;
+
+/**
+ * Only proportionally scale elements that opt-in via data-resize-scale="true".
+ * This prevents window resizes from mutating arbitrary element properties.
+ */
 window.addEventListener("resize", () => {
     const newWidth = window.innerWidth;
+
     if (!lastWidth || lastWidth <= 0) {
         lastWidth = newWidth;
         return;
@@ -102,8 +132,9 @@ window.addEventListener("resize", () => {
     lastWidth = newWidth;
     console.log("Resized", scale);
 
-    // All elements with a data-id, so all json-ui elements.
-    const elements = document.querySelectorAll("[data-id]");
+    // Only scale elements that explicitly opt-in.
+    const elements = document.querySelectorAll('[data-id][data-resize-scale="true"]');
+
     elements.forEach((el) => {
         const style = (el as HTMLElement).style;
 
@@ -112,8 +143,7 @@ window.addEventListener("resize", () => {
         const width = Number(style.width.replace(/[A-Za-z]/g, ""));
         const height = Number(style.height.replace(/[A-Za-z]/g, ""));
 
-        // Only apply scaling when we have valid numeric values; this avoids corrupting elements
-        // that rely on auto/percentage or unset styles.
+        // Only apply scaling when we have valid numeric values.
         if (isFinite(left)) {
             style.left = `${left * scale}px`;
         }

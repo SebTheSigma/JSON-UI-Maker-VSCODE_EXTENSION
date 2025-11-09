@@ -1,5 +1,5 @@
 import { container, WEB_SIDE_GLOBAL_ELEMENT_ID_MAP, vscode } from "./mainScript.js";
-import { makeElementResizable } from "./util/resizeUtil.js";
+import { makeElementResizable } from "../src/elements/util/resizeUtil.js";
 
 export class Panel {
     public data: any;
@@ -11,7 +11,7 @@ export class Panel {
     public initialX = 0;
     public initialY = 0;
     public parentRect: DOMRect;
-    
+
     private cleanupResize: (() => void) | null = null;
 
     constructor(data: any, parentId: string) {
@@ -40,7 +40,6 @@ export class Panel {
         WEB_SIDE_GLOBAL_ELEMENT_ID_MAP.set(this.data.dataset.id, this);
     }
 
-    // Stable document-level handlers bound to this instance.
     private readonly onMouseMove: (event: MouseEvent) => void = (event) => this.drag(event);
     private readonly onMouseUp: (event: MouseEvent) => void = () => this.stopDrag();
 
@@ -53,12 +52,9 @@ export class Panel {
             this.startDrag(event);
         });
 
-        // Register shared global listeners with stable references.
-        document.addEventListener("mousemove", this.onMouseMove);
-        document.addEventListener("mouseup", this.onMouseUp);
+        // DON'T add document listeners here! Only add them when actually dragging
 
         // Enable 8-direction resizing for this panel.
-        // Handles call stopPropagation/preventDefault; guard in startDrag prevents conflicts.
         this.cleanupResize = makeElementResizable(this.el, {
             parent: this.parent,
             minWidth: 40,
@@ -99,7 +95,6 @@ export class Panel {
                 return;
             }
 
-            // Remove selection from all other elements
             const selectedElements = document.querySelectorAll(".selected");
             selectedElements.forEach((element) => {
                 element.classList.remove("selected");
@@ -136,10 +131,20 @@ export class Panel {
         this.isDragging = true;
         this.initialX = event.clientX - rect.left;
         this.initialY = event.clientY - rect.top;
+
+        // ADD document listeners ONLY when we start dragging
+        document.addEventListener("mousemove", this.onMouseMove);
+        document.addEventListener("mouseup", this.onMouseUp);
     }
 
     public stopDrag() {
+        if (!this.isDragging) return;
+        
         this.isDragging = false;
+
+        // REMOVE document listeners when we stop dragging
+        document.removeEventListener("mousemove", this.onMouseMove);
+        document.removeEventListener("mouseup", this.onMouseUp);
     }
 
     public drag(event: MouseEvent) {
@@ -169,7 +174,7 @@ export class Panel {
             this.cleanupResize = null;
         }
 
-        // Remove document-level listeners for this instance to avoid leaks/ghost drags.
+        // Make sure to remove any lingering listeners
         document.removeEventListener("mousemove", this.onMouseMove);
         document.removeEventListener("mouseup", this.onMouseUp);
 

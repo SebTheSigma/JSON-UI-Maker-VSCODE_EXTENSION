@@ -28,27 +28,23 @@ var App = (() => {
     vscode: () => vscode
   });
 
-  // HTMLScripts/util/resizeUtil.ts
+  // src/elements/util/resizeUtil.ts
   function makeElementResizable(target, options = {}) {
+    console.log("makeElementResizable called on:", target);
     const parent = options.parent ?? target.offsetParent ?? target.parentElement;
     const minWidth = options.minWidth ?? 20;
     const minHeight = options.minHeight ?? 20;
-    if (!parent) {
-      console.warn(
-        "[resizeUtil] No parent found for resizable element; using viewport as bounds."
-      );
-    }
     const handles = [];
     const handleSize = 8;
     const directions = [
-      "n",
-      "s",
-      "e",
-      "w",
-      "ne",
       "nw",
-      "se",
-      "sw"
+      "n",
+      "ne",
+      "w",
+      "e",
+      "sw",
+      "s",
+      "se"
     ];
     const computed = window.getComputedStyle(target);
     if (computed.position !== "absolute" && computed.position !== "relative" && computed.position !== "fixed") {
@@ -59,61 +55,79 @@ var App = (() => {
       const handle = document.createElement("div");
       handle.dataset.resizeHandle = dir;
       handle.style.position = "absolute";
-      handle.style.width = dir === "n" || dir === "s" ? "100%" : `${handleSize}px`;
-      handle.style.height = dir === "e" || dir === "w" ? "100%" : `${handleSize}px`;
-      handle.style.zIndex = "9999";
+      handle.style.zIndex = "99999";
       handle.style.background = "transparent";
       handle.style.pointerEvents = "auto";
+      handle.style.userSelect = "none";
       switch (dir) {
         case "n":
           handle.style.top = "0";
-          handle.style.left = "0";
+          handle.style.left = `${handleSize}px`;
+          handle.style.right = `${handleSize}px`;
+          handle.style.height = `${handleSize}px`;
           handle.style.cursor = "n-resize";
           break;
         case "s":
           handle.style.bottom = "0";
-          handle.style.left = "0";
+          handle.style.left = `${handleSize}px`;
+          handle.style.right = `${handleSize}px`;
+          handle.style.height = `${handleSize}px`;
           handle.style.cursor = "s-resize";
           break;
         case "e":
-          handle.style.top = "0";
           handle.style.right = "0";
+          handle.style.top = `${handleSize}px`;
+          handle.style.bottom = `${handleSize}px`;
+          handle.style.width = `${handleSize}px`;
           handle.style.cursor = "e-resize";
           break;
         case "w":
-          handle.style.top = "0";
           handle.style.left = "0";
+          handle.style.top = `${handleSize}px`;
+          handle.style.bottom = `${handleSize}px`;
+          handle.style.width = `${handleSize}px`;
           handle.style.cursor = "w-resize";
           break;
         case "ne":
           handle.style.top = "0";
           handle.style.right = "0";
+          handle.style.width = `${handleSize}px`;
+          handle.style.height = `${handleSize}px`;
           handle.style.cursor = "ne-resize";
           break;
         case "nw":
           handle.style.top = "0";
           handle.style.left = "0";
+          handle.style.width = `${handleSize}px`;
+          handle.style.height = `${handleSize}px`;
           handle.style.cursor = "nw-resize";
           break;
         case "se":
           handle.style.bottom = "0";
           handle.style.right = "0";
+          handle.style.width = `${handleSize}px`;
+          handle.style.height = `${handleSize}px`;
           handle.style.cursor = "se-resize";
           break;
         case "sw":
           handle.style.bottom = "0";
           handle.style.left = "0";
+          handle.style.width = `${handleSize}px`;
+          handle.style.height = `${handleSize}px`;
           handle.style.cursor = "sw-resize";
           break;
       }
       handle.addEventListener("mousedown", (event) => {
+        console.log("Handle mousedown:", dir);
         event.preventDefault();
         event.stopPropagation();
         startResize(event, dir);
       });
       target.appendChild(handle);
       handles.push({ dir, el: handle });
+      console.log("Created handle:", dir, handle);
     }
+    console.log("Total handles created:", handles.length);
     let isResizing = false;
     let currentDir = null;
     let startX = 0;
@@ -126,100 +140,118 @@ var App = (() => {
       if (!isResizing || !currentDir) {
         return;
       }
-      const parentRect = parent?.getBoundingClientRect() ?? new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+      event.preventDefault();
+      event.stopPropagation();
       const dx = event.clientX - startX;
       const dy = event.clientY - startY;
-      let newWidth = startWidth;
-      let newHeight = startHeight;
-      let newLeft = startLeft;
-      let newTop = startTop;
-      if (currentDir.includes("e")) {
-        newWidth = clamp(
-          startWidth + dx,
-          minWidth,
-          parentRect.width - (startLeft - parentRect.left)
-        );
+      const parentWidth = parent ? parent.clientWidth : Number.POSITIVE_INFINITY;
+      const parentHeight = parent ? parent.clientHeight : Number.POSITIVE_INFINITY;
+      const hasEast = currentDir.includes("e");
+      const hasWest = currentDir.includes("w");
+      const hasNorth = currentDir.includes("n");
+      const hasSouth = currentDir.includes("s");
+      if (hasEast && !hasWest) {
+        let newWidth = startWidth + dx;
+        if (parent) {
+          newWidth = Math.min(newWidth, parentWidth - startLeft);
+        }
+        newWidth = Math.max(minWidth, newWidth);
+        target.style.width = `${newWidth}px`;
+      } else if (hasWest && !hasEast) {
+        let newLeft = startLeft + dx;
+        let newWidth = startWidth - dx;
+        if (parent && newLeft < 0) {
+          newLeft = 0;
+          newWidth = startLeft + startWidth;
+        }
+        if (newWidth < minWidth) {
+          newWidth = minWidth;
+          newLeft = startLeft + startWidth - minWidth;
+        }
+        target.style.left = `${newLeft}px`;
+        target.style.width = `${newWidth}px`;
+      } else if (hasEast && hasWest) {
+        let newWidth = startWidth + dx;
+        if (parent) {
+          newWidth = Math.min(newWidth, parentWidth - startLeft);
+        }
+        newWidth = Math.max(minWidth, newWidth);
+        target.style.width = `${newWidth}px`;
       }
-      if (currentDir.includes("s")) {
-        newHeight = clamp(
-          startHeight + dy,
-          minHeight,
-          parentRect.height - (startTop - parentRect.top)
-        );
+      if (hasSouth && !hasNorth) {
+        let newHeight = startHeight + dy;
+        if (parent) {
+          newHeight = Math.min(newHeight, parentHeight - startTop);
+        }
+        newHeight = Math.max(minHeight, newHeight);
+        target.style.height = `${newHeight}px`;
+      } else if (hasNorth && !hasSouth) {
+        let newTop = startTop + dy;
+        let newHeight = startHeight - dy;
+        if (parent && newTop < 0) {
+          newTop = 0;
+          newHeight = startTop + startHeight;
+        }
+        if (newHeight < minHeight) {
+          newHeight = minHeight;
+          newTop = startTop + startHeight - minHeight;
+        }
+        target.style.top = `${newTop}px`;
+        target.style.height = `${newHeight}px`;
+      } else if (hasSouth && hasNorth) {
+        let newHeight = startHeight + dy;
+        if (parent) {
+          newHeight = Math.min(newHeight, parentHeight - startTop);
+        }
+        newHeight = Math.max(minHeight, newHeight);
+        target.style.height = `${newHeight}px`;
       }
-      if (currentDir.includes("w")) {
-        const maxDeltaLeft = startWidth - minWidth;
-        const pxFromParentLeft = startLeft - parentRect.left;
-        const minLeftWithinParent = parentRect.left;
-        let proposedLeft = startLeft + dx;
-        const constrainedLeft = Math.max(
-          minLeftWithinParent,
-          Math.min(startLeft + maxDeltaLeft, proposedLeft)
-        );
-        const appliedDx = constrainedLeft - startLeft;
-        newLeft = constrainedLeft;
-        newWidth = startWidth - appliedDx;
-      }
-      if (currentDir.includes("n")) {
-        const maxDeltaTop = startHeight - minHeight;
-        const pxFromParentTop = startTop - parentRect.top;
-        const minTopWithinParent = parentRect.top;
-        let proposedTop = startTop + dy;
-        const constrainedTop = Math.max(
-          minTopWithinParent,
-          Math.min(startTop + maxDeltaTop, proposedTop)
-        );
-        const appliedDy = constrainedTop - startTop;
-        newTop = constrainedTop;
-        newHeight = startHeight - appliedDy;
-      }
-      const parentLeft = parentRect.left;
-      const parentTop = parentRect.top;
-      const offsetLeft = newLeft - parentLeft;
-      const offsetTop = newTop - parentTop;
-      target.style.width = `${newWidth}px`;
-      target.style.height = `${newHeight}px`;
-      target.style.left = `${offsetLeft}px`;
-      target.style.top = `${offsetTop}px`;
       if (options.onResize) {
         const rect = target.getBoundingClientRect();
         options.onResize(rect, target.style);
       }
     };
-    const onMouseUp = () => {
+    const onMouseUp = (event) => {
       if (!isResizing) {
         return;
       }
+      console.log("Resize ended");
+      event.preventDefault();
+      event.stopPropagation();
       isResizing = false;
       currentDir = null;
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("mousemove", onMouseMove, true);
+      document.removeEventListener("mouseup", onMouseUp, true);
     };
     function startResize(event, dir) {
-      const rect = target.getBoundingClientRect();
-      const parentRect = parent?.getBoundingClientRect() ?? new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+      console.log("startResize called:", dir);
       isResizing = true;
       currentDir = dir;
       startX = event.clientX;
       startY = event.clientY;
-      startWidth = rect.width;
-      startHeight = rect.height;
-      startLeft = rect.left;
-      startTop = rect.top;
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
-    }
-    function clamp(value, min, max) {
-      return Math.max(min, Math.min(max, value));
+      startLeft = parseFloat(target.style.left) || 0;
+      startTop = parseFloat(target.style.top) || 0;
+      startWidth = target.offsetWidth;
+      startHeight = target.offsetHeight;
+      console.log("Start resize:", {
+        dir,
+        startLeft,
+        startTop,
+        startWidth,
+        startHeight
+      });
+      document.addEventListener("mousemove", onMouseMove, true);
+      document.addEventListener("mouseup", onMouseUp, true);
     }
     return () => {
+      console.log("Cleanup resize handles");
       handles.forEach((h) => {
         if (h.el.parentElement === target) {
           target.removeChild(h.el);
         }
       });
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("mousemove", onMouseMove, true);
+      document.removeEventListener("mouseup", onMouseUp, true);
     };
   }
 
@@ -235,7 +267,6 @@ var App = (() => {
       __publicField(this, "initialY", 0);
       __publicField(this, "parentRect");
       __publicField(this, "cleanupResize", null);
-      // Stable document-level handlers bound to this instance.
       __publicField(this, "onMouseMove", (event) => this.drag(event));
       __publicField(this, "onMouseUp", () => this.stopDrag());
       this.data = data;
@@ -261,8 +292,6 @@ var App = (() => {
       this.el.addEventListener("mousedown", (event) => {
         this.startDrag(event);
       });
-      document.addEventListener("mousemove", this.onMouseMove);
-      document.addEventListener("mouseup", this.onMouseUp);
       this.cleanupResize = makeElementResizable(this.el, {
         parent: this.parent,
         minWidth: 40,
@@ -324,9 +353,14 @@ var App = (() => {
       this.isDragging = true;
       this.initialX = event.clientX - rect.left;
       this.initialY = event.clientY - rect.top;
+      document.addEventListener("mousemove", this.onMouseMove);
+      document.addEventListener("mouseup", this.onMouseUp);
     }
     stopDrag() {
+      if (!this.isDragging) return;
       this.isDragging = false;
+      document.removeEventListener("mousemove", this.onMouseMove);
+      document.removeEventListener("mouseup", this.onMouseUp);
     }
     drag(event) {
       if (!this.isDragging) {
@@ -370,10 +404,28 @@ var App = (() => {
           const panel = new Panel(data, parentId);
           break;
         }
+        default: {
+          const parent = parentId && document.querySelector(
+            `[data-id="${parentId}"]`
+          ) || container;
+          const el = document.querySelector(
+            `[data-id="${data.dataset?.id}"]`
+          );
+          if (el) {
+            makeElementResizable(el, {
+              parent,
+              minWidth: 20,
+              minHeight: 20
+            });
+          }
+          break;
+        }
       }
     } else if (msg.type === "delete_element") {
       const elementId = msg.dataID;
-      const element = document.querySelector(`[data-id="${elementId}"]`);
+      const element = document.querySelector(
+        `[data-id="${elementId}"]`
+      );
       if (!element) {
         return;
       }
@@ -384,7 +436,9 @@ var App = (() => {
     } else if (msg.type === "get_element_by_dataID") {
       const elementID = msg.dataID;
       console.warn("GETTING ELEMENT", elementID, msg);
-      const element = document.querySelector(`[data-id="${elementID}"]`);
+      const element = document.querySelector(
+        `[data-id="${elementID}"]`
+      );
       if (!element) {
         console.warn("Element not found Error: 01");
         return;
@@ -436,7 +490,7 @@ var App = (() => {
     }
     lastWidth = newWidth;
     console.log("Resized", scale);
-    const elements = document.querySelectorAll("[data-id]");
+    const elements = document.querySelectorAll('[data-id][data-resize-scale="true"]');
     elements.forEach((el) => {
       const style = el.style;
       const left = Number(style.left.replace(/[A-Za-z]/g, ""));
