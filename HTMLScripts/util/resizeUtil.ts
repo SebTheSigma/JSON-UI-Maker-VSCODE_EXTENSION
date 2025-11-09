@@ -42,6 +42,7 @@ export function makeElementResizable(
     target: HTMLElement,
     options: ResizeOptions = {}
 ): () => void {
+
     const parent =
         options.parent ??
         (target.offsetParent as HTMLElement | null) ??
@@ -167,7 +168,9 @@ export function makeElementResizable(
     let startTop = 0;
 
     const onMouseMove = (event: MouseEvent) => {
-        if (!isResizing || !currentDir) return;
+        if (!isResizing || !currentDir) {
+            return;
+        }
 
         const parentRect =
             parent?.getBoundingClientRect() ??
@@ -240,7 +243,9 @@ export function makeElementResizable(
     };
 
     const onMouseUp = () => {
-        if (!isResizing) return;
+        if (!isResizing) {
+            return;
+        }
         isResizing = false;
         currentDir = null;
         document.removeEventListener("mousemove", onMouseMove);

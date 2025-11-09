@@ -28,7 +28,7 @@ var App = (() => {
     vscode: () => vscode
   });
 
-  // src/elements/util/resizeUtil.ts
+  // HTMLScripts/util/resizeUtil.ts
   function makeElementResizable(target, options = {}) {
     const parent = options.parent ?? target.offsetParent ?? target.parentElement;
     const minWidth = options.minWidth ?? 20;
@@ -123,7 +123,9 @@ var App = (() => {
     let startLeft = 0;
     let startTop = 0;
     const onMouseMove = (event) => {
-      if (!isResizing || !currentDir) return;
+      if (!isResizing || !currentDir) {
+        return;
+      }
       const parentRect = parent?.getBoundingClientRect() ?? new DOMRect(0, 0, window.innerWidth, window.innerHeight);
       const dx = event.clientX - startX;
       const dy = event.clientY - startY;
@@ -185,7 +187,9 @@ var App = (() => {
       }
     };
     const onMouseUp = () => {
-      if (!isResizing) return;
+      if (!isResizing) {
+        return;
+      }
       isResizing = false;
       currentDir = null;
       document.removeEventListener("mousemove", onMouseMove);
@@ -361,28 +365,10 @@ var App = (() => {
           const panel = new Panel(data, parentId);
           break;
         }
-        default: {
-          const parent = parentId && document.querySelector(
-            `[data-id="${parentId}"]`
-          ) || container;
-          const el = document.querySelector(
-            `[data-id="${data.dataset?.id}"]`
-          );
-          if (el) {
-            makeElementResizable(el, {
-              parent,
-              minWidth: 20,
-              minHeight: 20
-            });
-          }
-          break;
-        }
       }
     } else if (msg.type === "delete_element") {
       const elementId = msg.dataID;
-      const element = document.querySelector(
-        `[data-id="${elementId}"]`
-      );
+      const element = document.querySelector(`[data-id="${elementId}"]`);
       if (!element) {
         return;
       }
@@ -393,9 +379,7 @@ var App = (() => {
     } else if (msg.type === "get_element_by_dataID") {
       const elementID = msg.dataID;
       console.warn("GETTING ELEMENT", elementID, msg);
-      const element = document.querySelector(
-        `[data-id="${elementID}"]`
-      );
+      const element = document.querySelector(`[data-id="${elementID}"]`);
       if (!element) {
         console.warn("Element not found Error: 01");
         return;

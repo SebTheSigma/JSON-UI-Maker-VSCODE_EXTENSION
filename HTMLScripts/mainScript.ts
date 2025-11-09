@@ -1,5 +1,5 @@
 import { Panel } from "./panel.js";
-import { makeElementResizable } from "../src/elements/util/resizeUtil.js";
+import { makeElementResizable } from "./util/resizeUtil.js";
 
 declare function acquireVsCodeApi(): {
     postMessage: (message: any) => void;
@@ -22,33 +22,10 @@ window.addEventListener("message", (event) => {
                 // Panel constructor enables its own resizing via makeElementResizable.
                 break;
             }
-            default: {
-                // Generic element support: make any created element resizable
-                const parent =
-                    (parentId &&
-                        (document.querySelector(
-                            `[data-id="${parentId}"]`
-                        ) as HTMLElement | null)) || container;
-
-                const el = document.querySelector(
-                    `[data-id="${data.dataset?.id}"]`
-                ) as HTMLElement | null;
-
-                if (el) {
-                    makeElementResizable(el, {
-                        parent,
-                        minWidth: 20,
-                        minHeight: 20,
-                    });
-                }
-                break;
-            }
         }
     } else if (msg.type === "delete_element") {
         const elementId = msg.dataID;
-        const element = document.querySelector(
-            `[data-id="${elementId}"]`
-        ) as HTMLElement | null;
+        const element = document.querySelector(`[data-id="${elementId}"]`) as HTMLElement | null;
         if (!element) {
             return;
         }
@@ -61,9 +38,7 @@ window.addEventListener("message", (event) => {
         const elementID = msg.dataID;
         console.warn("GETTING ELEMENT", elementID, msg);
 
-        const element = document.querySelector(
-            `[data-id="${elementID}"]`
-        ) as HTMLElement | null;
+        const element = document.querySelector(`[data-id="${elementID}"]`) as HTMLElement | null;
         if (!element) {
             console.warn("Element not found Error: 01");
             return;
@@ -105,7 +80,8 @@ for (const button of buttons) {
     });
 }
 
-type ALL_ELEMENTS = Panel;
+export type ALL_ELEMENTS = Panel;
+export type RESIZEABLE_ELEMENTS = Panel;
 export const WEB_SIDE_GLOBAL_ELEMENT_ID_MAP = new Map<string, ALL_ELEMENTS>();
 
 let lastWidth = window.innerWidth;

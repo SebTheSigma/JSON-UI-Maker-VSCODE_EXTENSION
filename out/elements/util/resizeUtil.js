@@ -11,7 +11,8 @@ exports.makeElementResizable = makeElementResizable;
  *   - Only initiating resize when mousedown originates from a handle, not the body of the element.
  *   - Using stopPropagation on handle mousedown.
  */
-function makeElementResizable(target, options = {}) {
+function makeElementResizable(classInstance, options = {}) {
+    const target = classInstance.el;
     const parent = options.parent ??
         target.offsetParent ??
         target.parentElement;

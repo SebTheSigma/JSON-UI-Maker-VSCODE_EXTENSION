@@ -1,5 +1,5 @@
 import { container, WEB_SIDE_GLOBAL_ELEMENT_ID_MAP, vscode } from "./mainScript.js";
-import { makeElementResizable } from "../src/elements/util/resizeUtil.js";
+import { makeElementResizable } from "./util/resizeUtil.js";
 
 export class Panel {
     public data: any;
@@ -11,7 +11,7 @@ export class Panel {
     public initialX = 0;
     public initialY = 0;
     public parentRect: DOMRect;
-
+    
     private cleanupResize: (() => void) | null = null;
 
     constructor(data: any, parentId: string) {
