@@ -1,4 +1,5 @@
 import { container, WEB_SIDE_GLOBAL_ELEMENT_ID_MAP, vscode } from "./mainScript.js";
+import { makeElementResizable } from "../src/elements/util/resizeUtil.js";
 
 export class Panel {
     public data: any;
@@ -10,6 +11,8 @@ export class Panel {
     public initialX = 0;
     public initialY = 0;
     public parentRect: DOMRect;
+
+    private cleanupResize: (() => void) | null = null;
 
     constructor(data: any, parentId: string) {
         this.data = data;
@@ -25,10 +28,10 @@ export class Panel {
         const parentHeight = Number(this.parent?.style.height!.replace(/[A-Za-z]/g, "")) || this.parentRect.height;
 
         this.el.style.zIndex = `${Number(this.parent.style.zIndex) + 1}`;
-        this.el.style.width = `${parentWidth * 0.8}px`!;
+        this.el.style.width = `${parentWidth * 0.8}px`;
         this.el.style.height = `${parentHeight * 0.8}px`;
 
-        this.el.style.left = `${parentWidth * 0.1}px`!;
+        this.el.style.left = `${parentWidth * 0.1}px`;
         this.el.style.top = `${parentHeight * 0.1}px`;
 
         this.init();
@@ -51,6 +54,13 @@ export class Panel {
 
         document.addEventListener("mousemove", (event) => {
             this.drag(event);
+        });
+
+        // Enable 8-direction resizing for this panel.
+        this.cleanupResize = makeElementResizable(this.el, {
+            parent: this.parent,
+            minWidth: 40,
+            minHeight: 40,
         });
     }
 
@@ -125,7 +135,6 @@ export class Panel {
             const deltaY = event.clientY - this.parentRect.top - this.initialY;
             this.el.style.left = `${deltaX}px`;
             this.el.style.top = `${deltaY}px`;
-            console.log(event.clientX, event.clientY);
         }
     }
 
@@ -136,6 +145,11 @@ export class Panel {
                 id: this.data.dataset.id,
                 selected: false,
             });
+        }
+
+        if (this.cleanupResize) {
+            this.cleanupResize();
+            this.cleanupResize = null;
         }
 
         this.parent.removeChild(this.el);
